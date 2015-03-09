@@ -1,0 +1,64 @@
+# TConf is a simple "language" derived from the syntax
+# used by BAs in FeedCorrect and Visual Venue Delivery tool.
+#
+# It doesn't do much. The things it allows you to do are:
+#   - Write comments (anything that follows # is a comment)
+#   - Express conditional logic using "if" statements
+#       - if, if-else, if-elif, if-elif-else are all supported
+#       - typical math expressions support: + - * / % (for mod)
+#       - typical boolean expression support: true false and or
+#   - Assign values (lhr = rhs as well as {lhs1, lhs2, lhsN} = rhs)
+#   - Call exiting functions/transforms
+#
+# Note how you cannot create new functions/transforms using tconf.
+# They need to be pre-made by a developer.
+
+# Transform syntax
+# TransformName({Input List}, {Output List})
+# eg.  standardTradeTransform (
+#                               { src.trd_prc, src.trd_qty, src.timestamp }, 
+#                               { veh.trd_prc_1, veh.trd_qty, veh.high_trd, veh.low_trd}
+#                             )
+
+
+# Look ma! I'm a simple assignment
+pub.trd_prc_1 = src.trd_prc_1
+
+# I'm a "multiple" assignment that can be done for efficiency
+{pub.trd_prc_2, pub.trd_prc_3} = src.trd_prc_1
+
+# And I'm an assignment with a simple math expression
+pub.trd_prc_4 = src.trd_prc_1 + 123.45
+
+
+# Assignments, they are really just a special
+# case of transform call. The ones above are equivalent to
+# copy({from}, {to})
+copy({src.trd_prc_1}, {pub.trd_prc_1})
+copy({src.trd_prc_1}, {pub.trd_prc_2, pub.trd_prc_3})
+copy({src.trd_prc_1 + 123.45}, {pub.trd_prc_4})
+
+
+# Conditional logic
+if src.trd_prc_1 == 20 and src.trd_cond == 'A'
+    pub.prc_indicator = "It was twenty + A"
+elif src.trd_prc_2 < 15 or src.trd_cond == 'C'
+    pub.prc_indicator = "man, it was less than 15 or C cond"
+else
+    pub.prc_indicator = src.trd_prc_1
+end
+
+# A slightly more complicated example showing how
+# you can call a "function" (aka evaluator)
+# within the condition.
+if isBlank({src.trd_prc_1}) == true
+    pub.msg = "src.trd_prc_1 was blank"
+else
+    pub.msg = "src.trd_prc_1 was not blank, but we made it so"
+    blank({}, {src.trd_prc_1})
+end
+
+
+if src.trd_cond == "A"
+    pub.msg2 = "Trade condition was A"
+end
