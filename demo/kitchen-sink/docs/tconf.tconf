@@ -1,64 +1,175 @@
-# TConf is a simple "language" derived from the syntax
-# used by BAs in FeedCorrect and Visual Venue Delivery tool.
-#
-# It doesn't do much. The things it allows you to do are:
-#   - Write comments (anything that follows # is a comment)
-#   - Express conditional logic using "if" statements
-#       - if, if-else, if-elif, if-elif-else are all supported
-#       - typical math expressions support: + - * / % (for mod)
-#       - typical boolean expression support: true false and or
-#   - Assign values (lhr = rhs as well as {lhs1, lhs2, lhsN} = rhs)
-#   - Call exiting functions/transforms
-#
-# Note how you cannot create new functions/transforms using tconf.
-# They need to be pre-made by a developer.
+// FG - Mutual Funds Valuation
 
-# Transform syntax
-# TransformName({Input List}, {Output List})
-# eg.  standardTradeTransform (
-#                               { src.trd_prc, src.trd_qty, src.timestamp }, 
-#                               { veh.trd_prc_1, veh.trd_qty, veh.high_trd, veh.low_trd}
-#                             )
+//  Here is comment from original IDN venue implementation, with FIDs
+//  renamed appropriately:
+//
+//* Only process the data if src.REC_DATE is today or previous trading day.
+//* 
+//* When the src.REC_DATE is today - update the fields and PUSHDOWN if
+//* this is the first message of the day.
+//* 
+//* When the REC_DATE is previous trading day, do one of the following:
+//* 1) If the veh.NAVDATE is older than src.REC_DATE, then treat the data like the
+//*    most recent data.  DO push down.
+//* 2) If the veh.NAVDATE is the same as src.REC_DATE, then treat the data like
+//*    the most recent data but NO push down.
+//* 3) Otherwise, only use the data to update the push-down fields.  The only
+//*    FIDed fields as of template 2.12 are the NAVALUE_1 and NAVDAT_1 and OFFER_1
 
 
-# Look ma! I'm a simple assignment
-pub.trd_prc_1 = src.trd_prc_1
+temp.local_date = convert_date(time_service, #GMTDATE, #GMTTIME, "MUT%DST")
+// temp.local_date = #GMTDATE  //For TTH
+tmp.prevDate = get_prev_exch_trading_day(time_service, #GMTDATE, #GMTTIME, "MUT%DST", "MUT%FD01", "MUT%HOL1")
+// tmp.prevDate = #GMTPREVDATE //For TTH
+temp.rec_date = convert_date(time_service, src.REC_DATE, src.REF_TM_MS, "MUT%DST") 
+// temp.rec_date = src.REC_DATE   //FOr TTH
 
-# I'm a "multiple" assignment that can be done for efficiency
-{pub.trd_prc_2, pub.trd_prc_3} = src.trd_prc_1
+//* FIDs will only be updated when src.rec_date is not older than one trading day
+//* #GMDATE + #GMTTIME represent today's date in GMT format
+//* #GMTPREVDATE + #GMTPREVTIME represent the previous trading day in GMT format
+//* NOTE: date check is to be based on dates in the exchange's time zone
 
-# And I'm an assignment with a simple math expression
-pub.trd_prc_4 = src.trd_prc_1 + 123.45
+na_msg_typ = src.na_msg_typ
+seqnum  = src.seqnum
+timact     = src.timact
+activ_date = src.activ_date
 
+if veh.inst_phase != 1 and exists(src.inst_phase)== #true then
+	inst_phase = src.inst_phase
+endif
 
-# Assignments, they are really just a special
-# case of transform call. The ones above are equivalent to
-# copy({from}, {to})
-copy({src.trd_prc_1}, {pub.trd_prc_1})
-copy({src.trd_prc_1}, {pub.trd_prc_2, pub.trd_prc_3})
-copy({src.trd_prc_1 + 123.45}, {pub.trd_prc_4})
+if exists(src.fund_type)==#true then
+	fund_type   = src.fund_type
+endif
 
+if temp.rec_date in [temp.local_date, tmp.prevDate] then
 
-# Conditional logic
-if src.trd_prc_1 == 20 and src.trd_cond == 'A'
-    pub.prc_indicator = "It was twenty + A"
-elif src.trd_prc_2 < 15 or src.trd_cond == 'C'
-    pub.prc_indicator = "man, it was less than 15 or C cond"
+    footnote1   = src.footnote1 
+    footnote2   = src.footnote2
+
+	//* Convert NAVDATE from the vehicle (which is in GMT) to exchange's time zone
+	if exists(veh.navdate)==#true and veh.navdate!=#blank then
+		temp.veh_navdate=convert_date(time_service, veh.navdate, src.REF_TM_MS, "MUT%DST")
+        // temp.veh_navdate =  veh.navdate // For TTH
+	else
+		temp.veh_navdate=#blank  
+	endif
+
+	//* NAV related FIDs will only be updated when NAV/Redemption Price is present
+	if (src.fund_type != 'US' and exists(src.nav)==#true and src.nav != 0.00) or (src.fund_type == 'US' and exists(src.redem_prc)==#true and src.redem_prc != 0.00) then
+
+		tmp.most_recent_data = #false
+		if temp.rec_date == temp.local_date then
+			tmp.most_recent_data = #True
+			if (temp.veh_navdate == #blank or temp.veh_navdate == temp.rec_date) then
+				tmp.push_down = #false
+			else
+				tmp.push_down = #True
+			endif
+		else
+			if (temp.veh_navdate != #blank and temp.veh_navdate < temp.rec_date) then
+				tmp.most_recent_data = #True
+				tmp.push_down = #True
+			else
+				if (temp.veh_navdate == #blank or temp.veh_navdate == temp.rec_date) then
+					tmp.most_recent_data = #True
+	    			tmp.push_down = #false
+				else
+					tmp.most_recent_data = #false
+    				tmp.push_down = #True
+				endif
+			endif
+		endif
+		
+		if tmp.most_recent_data == #True then
+
+			if tmp.push_down == #True then
+				navalue_1 = veh.navalue
+				navdat_1 = veh.navdate
+			endif
+
+			if exists(src.nav)==#true and src.nav != 0.00 then
+				nav        = src.nav
+			endif
+
+			if exists(src.redem_prc)==#true and src.redem_prc != 0.00 then
+				redem_prc  = src.redem_prc
+			endif
+			navdate = src.rec_date
+
+			if src.fund_type == 'US' then
+				navalue    = veh.redem_prc
+			else
+				navalue    = veh.nav
+			endif
+
+			if exists(src.ask)==#true and src.ask != 0.00 then
+				ask         = src.ask
+			endif 
+			if exists(src.alt_close)==#true and src.alt_close != 0.00 then
+				alt_close   = src.alt_close
+				alt_cls_dt = src.rec_date
+			endif 
+			
+			if exists(src.assets)==#true and src.assets != 0.00 then
+				assets = src.assets
+                gen_val1 = src.assets
+			endif
+			
+                        if exists(src.alt_close) == #true and src.alt_close != 0.00 then			
+                            offer = src.alt_close
+                        elseif exists(src.ask) == #true then
+                            offer = src.ask
+			elseif find(src.footnote1+src.footnote2,'N') !=#Blank then
+                            offer = veh.nav
+			endif
+			
+		else
+			navdat_1  = src.rec_date
+
+			if src.fund_type == 'US' then
+				if exists(src.redem_prc) == #true and src.redem_prc != 0.00 then
+					navalue_1 = src.redem_prc
+				endif
+			else
+				if exists(src.nav) == #true and src.nav != 0.00 then
+					navalue_1 = src.nav
+				endif
+			endif
+		endif
+
+		// nav_netchn and pctchng logic
+		if veh.navalue_1 != #Blank and veh.navalue != #BLANK then
+			nav_netchn = veh.navalue - veh.navalue_1
+			if veh.navalue_1 != 0 then
+				pctchng = rescale(veh.nav_netchn / veh.navalue_1 * 100, -6)
+			else
+				pctchng = 0.00
+			endif
+		else
+			nav_netchn = 0.00
+			pctchng = 0.00
+		endif
+
+        // prc_ql2 logic
+        if src.inst_phase == 1 then
+            prc_ql2 = 168 //clo
+        elseif veh.prc_ql2 != 168 then
+            prc_ql2 = 65 //ind
+        endif
+    
+        REF_TM_MS   = src.REF_TM_MS
+        reftimzone= src.reftimzone
+
+	endif	
+
+	pub_hdr.update_type = src_hdr.update_type // copy update type from the input message header
+
+    if pub_hdr.update_type == 7 then  // set do_not_ripple for correction
+		pub_hdr.do_not_ripple = true
+    endif
 else
-    pub.prc_indicator = src.trd_prc_1
-end
+	pub_hdr.update_type = 0 // "UNSPECIFIED"
+endif
 
-# A slightly more complicated example showing how
-# you can call a "function" (aka evaluator)
-# within the condition.
-if isBlank({src.trd_prc_1}) == true
-    pub.msg = "src.trd_prc_1 was blank"
-else
-    pub.msg = "src.trd_prc_1 was not blank, but we made it so"
-    blank({}, {src.trd_prc_1})
-end
-
-
-if src.trd_cond == "A"
-    pub.msg2 = "Trade condition was A"
-end
+// done with FG
