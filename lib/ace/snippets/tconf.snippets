@@ -1,0 +1,61 @@
+#########################################
+# TConf snippets - for TConf, see below #
+#########################################
+
+snippet if
+	if ${1:condition} then
+		${2}
+	endif
+snippet if-else
+	if ${1:condition} then
+		${2}
+	else
+		${3}
+	endif
+snippet if-elseif-else
+	if ${1:condition} then
+		${2}
+	elseif ${3:condition} then
+		${4}
+	else
+		${5}
+	endif
+#snippet ife
+#	if ${1:condition} then
+#		${2}
+#	else
+#		${3}
+#	endif
+#snippet elsif
+#	elsif ${1:condition} then
+#		${2}
+snippet in
+	in [${1:value1}, ${2:value2} ]
+snippet find
+	find(${1:value1}, ${2:value2} )
+snippet copy
+	copy(${1:pub.fid1}, [${2:pub.fid2}, ${3:pub.fid3}] )
+snippet exists
+	exists(${1:src.FID}) == ${2:#true}
+snippet strtime
+	strtime(${1:"2116-12-20 22:00:00.000"})
+snippet map
+	map(${1:src.trd_prc_1}, {${2:key1}\:${3:value1},${4:key2}\:${5:value2}})
+snippet convert_date
+	convert_date(time_service, ${1:#GMTDATE}, ${2:#GMTTIME}, ${3:"MUT\%DST"})
+snippet get_prev_exch_trading_day
+	get_prev_exch_trading_day(time_service, ${1:#GMTDATE}, ${2:#GMTTIME},${3:"MUT\%DST"},${4:"MUT\%FD01"}, ${5:"MUT\%HOL1"})
+snippet rescale
+	rescale(${1: veh.nav_netchn/ veh.navalue * 100}, ${2:-6} )
+#snippet pub
+#	pub.FID // e.g. pub.trdprc_1
+#snippet pub.
+#	FID // e.g. trdprc_1
+#snippet src
+#	src.FID // e.g. src.trdc_1
+#snippet src.
+#	FID // e.g. trdprc_1
+#snippet veh
+#	veh.FID // e.g. veh.trdprc_1
+#snippet veh.
+#	FID // e.g. trdprc_1
